@@ -14,6 +14,8 @@ class CustomNode:
 
 
 # Класс ДР
+# дерево решений строится по алгоритму CART
+# использует индекс Джини (Gini Index)
 class CustomDecisionTree():
     # критерии остановки: max_depth, min_samples_split, root_node
     def __init__(self, max_depth=100, min_samples_split=2):
