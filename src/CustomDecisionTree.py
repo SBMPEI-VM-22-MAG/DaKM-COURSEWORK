@@ -1,89 +1,106 @@
 import numpy as np
 
 class CustomDecisionTree:
-    def __init__(self, max_depth=100, min_samples_split=2):
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
+    def __init__(self, max_depth=100, minimum_samples_split=2):
+        self.maximum_depth = max_depth
+        self.minimum_samples_split = minimum_samples_split
         self.root = None
+        
+    def fit(self, features, labels):
+        self.root = self._build_dt(features, labels)
 
-    def _entropy(self, y):
-        n = len(y)
-        unique_values, counts = np.unique(y, return_counts=True)
+    def predict(self, features):
+        predictions = [self._run_tree(x, self.root) for x in features]
+        return np.array(predictions)
+
+    def display_tree(self, node=None, current_depth=0):
+        if node is None:
+            node = self.root
+
+        indentation = "  " * current_depth
+        if node.is_leaf():
+            print(indentation + f"Secret Leaf Node: Category {node.value}")
+        else:
+            print(indentation + f"Enigmatic Node: Feature {node.feature}, Threshold {node.threshold}")
+            print(indentation + "  Left Branch:")
+            self.display_tree(node.left, current_depth + 1)
+            print(indentation + "  Right Branch:")
+            self.display_tree(node.right, current_depth + 1)
+
+    def _entropy(self, labels):
+        n = len(labels)
+        unique_values, counts = np.unique(labels, return_counts=True)
+        unique_counts = dict(zip(unique_values, counts))
         entropy = 0.0
-        for count in counts:
+        for count in unique_counts.values():
             p = count / n
             entropy -= p * np.log2(p)
         return entropy
+    
+    def _build_dt(self, features, labels, current_depth=0):
+        self.n_samples, self.n_features = features.shape
+        self.n_class_labels = len(np.unique(labels))
 
-    def _find_best_split(self, X, y, available_features):
-        best_split = {"score": -1, "feature": None, "threshold": None}
-
-        for feature in available_features:
-            feature_values = X[:, feature]
+        # Stopping criteria
+        limit1 = current_depth >= self.maximum_depth
+        limit2 = self.n_class_labels == 1
+        limit3 = self.n_samples < self.minimum_samples_split
+        if (limit1 or limit2 or limit3):
+            unique_values, counts = np.unique(labels, return_counts=True)
+            unique_counts = dict(zip(unique_values, counts))
+            most_common_category = max(unique_counts, key=unique_counts.get)
+            return CustomNode(value=most_common_category)
+        
+        # Best split
+        random_features = np.random.choice(self.n_features, self.n_features, replace=False)
+        
+        best_feature = None
+        best_threshold = None
+        split_score = -1
+        
+        for feature in random_features:
+            feature_values = features[:, feature]
             thresholds = np.unique(feature_values)
-
+            
             for threshold in thresholds:
+                score = 0
+                parent_entropy = self._entropy(labels)
                 left_indices = np.argwhere(feature_values <= threshold).flatten()
                 right_indices = np.argwhere(feature_values > threshold).flatten()
-                n, n_left, n_right = len(y), len(left_indices), len(right_indices)
+                n, n_left, n_right = len(labels), len(left_indices), len(right_indices)
 
-                if n_left == 0 or n_right == 0:
-                    continue
+                if (n_left != 0 and n_right != 0):
+                    child_entropy = (n_left / n) * self._entropy(labels[left_indices]) + (n_right / n) * self._entropy(labels[right_indices])
+                    score = parent_entropy - child_entropy
+            
+                if (score > split_score):
+                    split_score = score
+                    best_feature = feature
+                    best_threshold = threshold
+        
+        # Recursive obtaining of children (nodes)
+        left_indices = np.argwhere(features[:, best_feature] <= best_threshold).flatten()
+        right_indices = np.argwhere(features[:, best_feature] > best_threshold).flatten()
+        left_child = self._build_dt(features[left_indices, :], labels[left_indices], current_depth + 1)
+        right_child = self._build_dt(features[right_indices, :], labels[right_indices], current_depth + 1)
+        return CustomNode(best_feature, best_threshold, left_child, right_child)
 
-                left_entropy = self._entropy(y[left_indices])
-                right_entropy = self._entropy(y[right_indices])
 
-                child_entropy = (n_left / n) * left_entropy + (n_right / n) * right_entropy
-                information_gain = self._entropy(y) - child_entropy
 
-                if information_gain > best_split["score"]:
-                    best_split["score"] = information_gain
-                    best_split["feature"] = feature
-                    best_split["threshold"] = threshold
+    def _run_tree(self, x, node):
+        while not node.is_leaf():
+            if x[node.feature] <= node.threshold:
+                node = node.left
+            else:
+                node = node.right
+        return node.value
 
-        return best_split
 
-    def _build_tree(self, X, y, depth=0):
-        num_samples, num_features = X.shape
-        num_classes = len(np.unique(y))
+# Node Class
+class CustomNode:
+    def __init__(self, feature=None, threshold=None, left=None, right=None, value=None):
+        self.feature, self.threshold, self.left, self.right, self.value = feature, threshold, left, right, value
 
-        if depth >= self.max_depth or num_classes == 1 or num_samples < self.min_samples_split:
-            most_common_label = np.bincount(y).argmax()
-            return {"value": most_common_label, "is_leaf": True}
+    def is_leaf(self):
+        return self.value is not None
 
-        available_features = np.random.choice(num_features, num_features, replace=False)
-        best_split = self._find_best_split(X, y, available_features)
-
-        left_indices = np.argwhere(X[:, best_split["feature"]] <= best_split["threshold"]).flatten()
-        right_indices = np.argwhere(X[:, best_split["feature"]] > best_split["threshold"]).flatten()
-
-        left_subtree = self._build_tree(X[left_indices], y[left_indices], depth + 1)
-        right_subtree = self._build_tree(X[right_indices], y[right_indices], depth + 1)
-
-        return {
-            "feature": best_split["feature"],
-            "threshold": best_split["threshold"],
-            "left": left_subtree,
-            "right": right_subtree,
-            "is_leaf": False,
-        }
-
-    def fit(self, X, y):
-        if not isinstance(X, np.ndarray):
-            X = X.to_numpy()
-        if not isinstance(y, np.ndarray):
-            y = y.to_numpy()
-        self.root = self._build_tree(X, y)
-
-    def _predict_one(self, x, node):
-        if node["is_leaf"]:
-            return node["value"]
-        if x[node["feature"]] <= node["threshold"]:
-            return self._predict_one(x, node["left"])
-        else:
-            return self._predict_one(x, node["right"])
-
-    def predict(self, X):
-        if not isinstance(X, np.ndarray):
-            X = X.to_numpy()
-        return [self._predict_one(x, self.root) for x in X]
