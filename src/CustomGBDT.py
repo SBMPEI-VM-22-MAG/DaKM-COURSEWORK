@@ -18,6 +18,7 @@ class CustomGBDT:
             gradient = y - predictions
             # print("gradient")
             # print(gradient)
+            # print(X)
             idx += 1
             print("Tree=",idx)
             
