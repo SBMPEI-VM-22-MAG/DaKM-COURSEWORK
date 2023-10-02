@@ -50,11 +50,11 @@ class CustomDecisionTree:
             most_common_Label = max(u_c, key=u_c.get)
             return CustomNode(value=most_common_Label)
         
-        rnd_feats = np.random.choice(self.n_features, self.n_features, replace=False)
+        my_feats = np.arange(self.n_features)
         best_feat = None
         best_thresh = None
         split = -1
-        for feat in rnd_feats:
+        for feat in my_feats:
             # print(feat)
             X_feat = X[:, feat]
             thresholds = np.unique(X_feat)
